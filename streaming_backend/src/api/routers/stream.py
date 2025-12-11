@@ -1,4 +1,5 @@
 from typing import Optional
+
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.responses import StreamingResponse
@@ -13,6 +14,13 @@ router = APIRouter()
 async def _proxy_range_stream(url: str, range_header: Optional[str]) -> StreamingResponse:
     """
     Stream bytes from a remote URL with Range support by proxying headers.
+
+    This helper:
+      - Forwards the incoming `Range` header (if present) to the upstream server.
+      - Mirrors key headers from the upstream response:
+        `Content-Type`, `Content-Length`, `Accept-Ranges`, and `Content-Range`.
+      - Preserves the upstream HTTP status code (200 or 206).
+      - Ensures the aiohttp ClientSession is closed once streaming completes.
     """
     headers = {}
     if range_header:
@@ -45,21 +53,39 @@ async def _proxy_range_stream(url: str, range_header: Optional[str]) -> Streamin
 
 
 # PUBLIC_INTERFACE
-@router.get("/{video_id}", summary="Stream video by ID", tags=["stream"])
+@router.get(
+    "/{video_id}",
+    summary="Stream video by ID",
+    description=(
+        "Proxy video bytes from the video's `video_url` field with HTTP Range support. "
+        "Clients should send a `Range` header for seeking. The endpoint forwards this "
+        "header upstream and exposes `Accept-Ranges`, `Content-Range`, `Content-Type`, "
+        "and `Content-Length` where available."
+    ),
+    tags=["stream"],
+)
 async def stream_video(
     video_id: int,
     db: Session = Depends(get_db),
-    range_header: Optional[str] = Header(None, alias="Range"),
+    range_header: Optional[str] = Header(
+        default=None,
+        alias="Range",
+        description="Standard HTTP Range header, e.g. 'bytes=0-'.",
+    ),
 ):
     """
     Stream video content with HTTP Range support.
 
     Parameters:
-        video_id: ID of the video to stream
-        Range header: Optional; passed through to upstream server
+        video_id: ID of the video to stream.
+        range_header: Optional; passed through to the upstream server as `Range`.
 
     Returns:
-        StreamingResponse: proxied stream with appropriate headers
+        StreamingResponse: Proxied stream with appropriate content and range headers.
+
+    Raises:
+        HTTPException(404): If the video does not exist.
+        HTTPException(4xx/5xx): If the upstream video URL responds with an error.
     """
     vid = get_video(db, video_id)
     if not vid:
