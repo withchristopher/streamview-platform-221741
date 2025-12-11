@@ -1,5 +1,6 @@
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.db.session import get_db, engine, Base
@@ -70,6 +71,6 @@ def health_check(db: Session = Depends(get_db)):
     Returns:
         dict: {"message": "Healthy"}
     """
-    # Quick lightweight DB touch to assert session works
-    _ = db.execute("SELECT 1").scalar()
+    # Quick lightweight DB touch to assert session works (SQLAlchemy 2.x requires text())
+    _ = db.execute(text("SELECT 1")).scalar()
     return {"message": "Healthy"}
