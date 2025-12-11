@@ -59,26 +59,17 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     return Token(access_token=token, token_type="bearer")
 
 
-# PUBLIC_INTERFACE
-@router.get("/me", response_model=UserSchema, summary="Get current user", tags=["auth"])
-def me(current_user: User = Depends("get_current_user")):
-    """
-    Return the currently authenticated user.
-
-    This endpoint expects an Authorization header with a Bearer JWT token.
-    """
-    return current_user
-
-
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """
     Dependency helper that extracts the current user from the Authorization header (Bearer token).
 
-    This is intended for use with FastAPI's dependency injection system:
-        Depends(get_current_user)
+    Usage:
+        current_user: User = Depends(get_current_user)
 
     Raises:
-        HTTPException 401 if the token is missing, invalid, or the user does not exist.
+        HTTPException:
+            - 401 if bearer token is missing or invalid
+            - 401 if the referenced user does not exist
     """
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.lower().startswith("bearer "):
@@ -96,3 +87,14 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
     return user
+
+
+# PUBLIC_INTERFACE
+@router.get("/me", response_model=UserSchema, summary="Get current user", tags=["auth"])
+def me(current_user: User = Depends(get_current_user)):
+    """
+    Return the currently authenticated user.
+
+    This endpoint expects an Authorization header with a Bearer JWT token.
+    """
+    return current_user
